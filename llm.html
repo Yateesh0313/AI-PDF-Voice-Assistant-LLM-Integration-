@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI PDF Voice Assistant — Intelligent Document Q&A</title>
+  <meta name="description"
+    content="AI-powered PDF document assistant with voice input, intelligent Q&A, and RAG-based context-aware responses.">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+  <!-- ===== LANDING PAGE ===== -->
+  <div class="landing">
+    <div class="landing-bg"></div>
+    <div class="particles"></div>
+
+    <nav class="nav">
+      <div class="nav-logo">
+        <div class="icon">🤖</div> AI PDF Assistant
+      </div>
+      <button class="nav-cta" onclick="goToAuth()">Get Started →</button>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-badge">✨ Powered by AI & RAG Technology</div>
+      <h1>Your Intelligent<br>Document Assistant</h1>
+      <p>Upload PDFs, ask questions with text or voice, and get instant AI-powered answers. Context-aware responses
+        using advanced retrieval-augmented generation.</p>
+      <div class="hero-actions">
+        <button class="btn-primary" onclick="goToAuth()">Start for Free</button>
+        <button class="btn-secondary"
+          onclick="document.querySelector('.features').scrollIntoView({behavior:'smooth'})">See Features ↓</button>
+      </div>
+    </section>
+
+    <section class="features" id="features">
+      <h2>Powerful Features</h2>
+      <p class="sub">Everything you need for intelligent document analysis</p>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <span class="fi">📄</span>
+          <h3>PDF Intelligence</h3>
+          <p>Upload any PDF and ask questions. Our RAG pipeline extracts, embeds, and retrieves relevant context for
+            accurate answers.</p>
+        </div>
+        <div class="feature-card">
+          <span class="fi">🎤</span>
+          <h3>Voice Interaction</h3>
+          <p>Speak your questions naturally. Advanced speech recognition with Whisper AI transcribes and processes your
+            voice in real-time.</p>
+        </div>
+        <div class="feature-card">
+          <span class="fi">🧠</span>
+          <h3>Smart Context</h3>
+          <p>Automatically detects whether to answer from your PDF or general knowledge. See clear PDF/General badges on
+            every response.</p>
+        </div>
+        <div class="feature-card">
+          <span class="fi">💬</span>
+          <h3>Chat History</h3>
+          <p>All your conversations are saved with full session management. Pick up where you left off anytime.</p>
+        </div>
+        <div class="feature-card">
+          <span class="fi">🔒</span>
+          <h3>Secure & Private</h3>
+          <p>JWT-based authentication with encrypted passwords. Your documents and conversations stay private to your
+            account.</p>
+        </div>
+        <div class="feature-card">
+          <span class="fi">🔊</span>
+          <h3>Text-to-Speech</h3>
+          <p>Listen to AI responses with built-in voice output. Toggle TTS on/off and replay responses anytime.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="num">RAG</div>
+          <div class="label">Retrieval Augmented Generation</div>
+        </div>
+        <div class="stat-item">
+          <div class="num">FAISS</div>
+          <div class="label">Vector Similarity Search</div>
+        </div>
+        <div class="stat-item">
+          <div class="num">Whisper</div>
+          <div class="label">Speech Recognition AI</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="landing-footer">
+      © 2026 AI PDF Voice Assistant — Final Year Major Project
+    </footer>
+  </div>
+
+  <!-- ===== AUTH OVERLAY ===== -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="landing-bg"></div>
+    <div class="particles"></div>
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="icon">🤖</div>
+        <h2>AI PDF Assistant</h2>
+        <p>Sign in to continue</p>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Login</button>
+        <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Register</button>
+      </div>
+      <form id="loginForm" onsubmit="return handleLogin(event)">
+        <div class="auth-field"><label>Username</label><input id="lUser" required autocomplete="username"></div>
+        <div class="auth-field"><label>Password</label><input id="lPass" type="password" required
+            autocomplete="current-password"></div>
+        <button class="auth-submit" type="submit">Sign In</button>
+      </form>
+      <form id="registerForm" style="display:none" onsubmit="return handleRegister(event)">
+        <div class="auth-field"><label>Username</label><input id="rUser" required autocomplete="username"></div>
+        <div class="auth-field"><label>Email</label><input id="rEmail" type="email" required autocomplete="email"></div>
+        <div class="auth-field"><label>Password</label><input id="rPass" type="password" required minlength="4"
+            autocomplete="new-password"></div>
+        <button class="auth-submit" type="submit">Create Account</button>
+      </form>
+      <div class="auth-error" id="authError"></div>
+      <button class="auth-back" onclick="goToLanding()">← Back to Home</button>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <div class="main-app" id="mainApp">
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-header">
+        <div class="sb-avatar" id="sbAvatar">U</div>
+        <div class="sb-user">
+          <div class="name" id="sbName">User</div>
+          <div class="email" id="sbEmail">user@app.com</div>
+        </div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Chat History <button onclick="newChat()" title="New chat">＋</button></div>
+        <ul class="sb-list" id="sessionList"></ul>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">PDF Library <button onclick="document.getElementById('pdfFileInput').click()"
+            title="Upload PDF">＋</button></div>
+        <input type="file" id="pdfFileInput" accept=".pdf" style="display:none">
+        <ul class="sb-list" id="pdfList"></ul>
+      </div>
+      <div class="sb-fill"></div>
+      <div class="sb-footer"><button onclick="logout()">⏻ &nbsp;Sign Out</button></div>
+    </aside>
+
+    <div class="chat-panel">
+      <div class="cp-header">
+        <button class="cp-toggle" onclick="toggleSidebar()">☰</button>
+        <div class="cp-title" id="cpTitle">New Chat</div>
+        <div class="cp-actions">
+          <button class="cp-btn" id="uploadToggle" onclick="toggleUpload()" title="Upload PDF">📄<span
+              class="tip">Upload PDF</span></button>
+          <button class="cp-btn on" id="ttsBtn" onclick="toggleTTS()">🔊<span class="tip">Voice Output</span></button>
+          <button class="cp-btn" id="replayBtn" onclick="replayLast()" style="display:none">🔁<span
+              class="tip">Replay</span></button>
+        </div>
+      </div>
+
+      <div class="upload-bar hidden" id="uploadBar">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('dropInput').click()">
+          <input type="file" id="dropInput" accept=".pdf">
+          Drop PDF here or <span>browse</span>
+        </div>
+        <div class="upload-status" id="uploadStatus"></div>
+      </div>
+
+      <div class="chat-area" id="chatArea">
+        <div class="empty" id="emptyState">
+          <div class="ei">💬</div>
+          <p>Start a conversation — type a message or tap the mic. Upload a PDF for context-aware answers.</p>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <button class="mic" id="micBtn" onclick="toggleRec()">🎤</button>
+        <div class="wave-bar" id="waveBar"></div>
+        <input type="text" id="textInput" placeholder="Ask a question…" autocomplete="off">
+        <button class="send" id="sendBtn" onclick="sendText()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
