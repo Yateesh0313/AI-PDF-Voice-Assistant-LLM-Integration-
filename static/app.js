@@ -371,11 +371,18 @@ async function toggleRec() {
   if (!recording) {
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recorder = new MediaRecorder(micStream);
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+      recorder = mimeType
+        ? new MediaRecorder(micStream, { mimeType })
+        : new MediaRecorder(micStream);
       chunks = [];
       recorder.ondataavailable = e => chunks.push(e.data);
       recorder.onstop = sendVoice;
-      recorder.start();
+      recorder.start(250);
       recording = true;
       $('micBtn').classList.add('rec'); $('micBtn').textContent = '⏹';
       audioCtx = new AudioContext();
@@ -399,10 +406,12 @@ async function toggleRec() {
 }
 
 async function sendVoice() {
-  const blob = new Blob(chunks);
+  const mimeType = recorder && recorder.mimeType ? recorder.mimeType : 'audio/webm';
+  const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+  const blob = new Blob(chunks, { type: mimeType });
   addMsg('user', '🎤 Voice message');
   setBusy(true); addThinking();
-  const fd = new FormData(); fd.append('file', blob, 'voice.webm');
+  const fd = new FormData(); fd.append('file', blob, 'voice.' + ext);
   if (currentSessionId) fd.append('session_id', currentSessionId);
   try {
     const r = await api('/api/chat/voice', { method: 'POST', body: fd });

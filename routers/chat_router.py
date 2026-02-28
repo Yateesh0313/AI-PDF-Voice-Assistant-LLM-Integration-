@@ -139,6 +139,11 @@ def voice_chat(
     with open(audio_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Check file isn't empty
+    if os.path.getsize(audio_path) < 100:
+        os.remove(audio_path)
+        raise HTTPException(status_code=400, detail="Audio file is too short. Please hold the mic button longer and speak clearly.")
+
     try:
         question = speech_to_text(audio_path)
         if not question:
