@@ -7,13 +7,8 @@ databases:
 services:
   - type: web
     name: ai-pdf-assistant
-    runtime: python
+    runtime: docker
     plan: starter
-    buildCommand: |
-      apt-get update && apt-get install -y ffmpeg &&
-      pip install --upgrade pip &&
-      pip install -r requirements.txt
-    startCommand: "gunicorn app:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -21,8 +16,6 @@ services:
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
-      - key: PYTHON_VERSION
-        value: "3.11.6"
       - key: OPENAI_API_BASE
         sync: false            # set manually in Render dashboard
       - key: OPENAI_API_KEY

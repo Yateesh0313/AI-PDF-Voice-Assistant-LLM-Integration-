@@ -17,15 +17,27 @@ from config import (
     LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, LLM_TEMPERATURE, EMBEDDING_MODEL
 )
 
-# ── Initialize LLM & embeddings (once) ────────────────
-llm = ChatOpenAI(
-    model=LLM_MODEL,
-    temperature=LLM_TEMPERATURE,
-    openai_api_base=LLM_BASE_URL,
-    openai_api_key=LLM_API_KEY,
-)
+# ── Lazy-initialize LLM & embeddings (on first use) ───
+# Avoids blocking server startup — Render times out if port isn't bound quickly.
+_llm = None
+_embeddings = None
 
-embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+def _get_llm():
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(
+            model=LLM_MODEL,
+            temperature=LLM_TEMPERATURE,
+            openai_api_base=LLM_BASE_URL,
+            openai_api_key=LLM_API_KEY,
+        )
+    return _llm
+
+def _get_embeddings():
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+    return _embeddings
 
 # ── Per-user retriever cache ──────────────────────────
 _user_retrievers: Dict[int, object] = {}
@@ -45,7 +57,7 @@ def build_retriever(user_id: int, pdf_paths: List[str]):
             all_chunks.extend(splitter.split_documents(docs))
 
     if all_chunks:
-        vs = FAISS.from_documents(all_chunks, embeddings)
+        vs = FAISS.from_documents(all_chunks, _get_embeddings())
         _user_retrievers[user_id] = vs.as_retriever(search_kwargs={"k": 3})
     else:
         _user_retrievers.pop(user_id, None)
@@ -59,7 +71,7 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
     retriever = _user_retrievers.get(user_id)
 
     if retriever is None:
-        return llm.invoke(question).content, "general"
+        return _get_llm().invoke(question).content, "general"
 
     prompt = ChatPromptTemplate.from_template("""
     Use ONLY the PDF context to answer.
@@ -75,13 +87,13 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
     chain = (
         {"context": retriever, "question": RunnablePassthrough()}
         | prompt
-        | llm
+        | _get_llm()
         | StrOutputParser()
     )
 
     answer = chain.invoke(question)
 
     if "NO_DATA" in answer:
-        return llm.invoke(question).content, "general"
+        return _get_llm().invoke(question).content, "general"
 
     return answer, "pdf"

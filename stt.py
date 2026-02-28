@@ -24,8 +24,15 @@ from config import WHISPER_MODEL
 
 logger = logging.getLogger(__name__)
 
-# Load model once at import time
-model = whisper.load_model(WHISPER_MODEL)
+# Lazy-load model on first use (avoids blocking server startup)
+_model = None
+
+def _get_model():
+    global _model
+    if _model is None:
+        logger.info("Loading Whisper model '%s' (first request)...", WHISPER_MODEL)
+        _model = whisper.load_model(WHISPER_MODEL)
+    return _model
 
 
 def _convert_to_wav(input_path: str) -> str:
@@ -63,7 +70,7 @@ def speech_to_text(audio_path: str) -> str:
 
     try:
         logger.info("Transcribing %s with Whisper (model=%s)", wav_path, WHISPER_MODEL)
-        result = model.transcribe(
+        result = _get_model().transcribe(
             wav_path,
             fp16=False,
             language="en",
