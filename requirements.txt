@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
+gunicorn
 langchain
 langchain-openai
 langchain-community
@@ -16,3 +17,4 @@ bcrypt
 python-jose[cryptography]
 python-multipart
 pymysql
+psycopg2-binary

@@ -33,11 +33,14 @@ class UserResponse(BaseModel):
 # ── Helper: set auth cookie ───────────────────────────
 def _set_auth_cookie(response: Response, token: str):
     """Set JWT as an HTTP-only cookie (not accessible via JavaScript)."""
+    import os
+    is_production = bool(os.getenv("RENDER"))
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
         samesite="lax",
+        secure=is_production,      # True on Render (HTTPS), False locally
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )

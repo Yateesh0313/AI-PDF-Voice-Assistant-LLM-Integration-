@@ -7,15 +7,17 @@ import subprocess
 import tempfile
 import logging
 
-# ── Ensure ffmpeg is on PATH (winget installs to a non-PATH location) ──
-_FFMPEG_DIR = os.path.join(
-    os.environ.get("LOCALAPPDATA", ""),
-    "Microsoft", "WinGet", "Packages",
-    "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
-    "ffmpeg-8.0.1-full_build", "bin",
-)
-if os.path.isdir(_FFMPEG_DIR) and _FFMPEG_DIR not in os.environ.get("PATH", ""):
-    os.environ["PATH"] = _FFMPEG_DIR + os.pathsep + os.environ.get("PATH", "")
+# ── Ensure ffmpeg is on PATH ──
+import platform
+if platform.system() == "Windows":
+    _FFMPEG_DIR = os.path.join(
+        os.environ.get("LOCALAPPDATA", ""),
+        "Microsoft", "WinGet", "Packages",
+        "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe",
+        "ffmpeg-8.0.1-full_build", "bin",
+    )
+    if os.path.isdir(_FFMPEG_DIR) and _FFMPEG_DIR not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = _FFMPEG_DIR + os.pathsep + os.environ.get("PATH", "")
 
 import whisper
 from config import WHISPER_MODEL

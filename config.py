@@ -14,20 +14,23 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
 # ── Database ───────────────────────────────────────────
-# MySQL — the @ in the password must be URL-encoded (%40)
+# Local: MySQL via PyMySQL
+# Render: PostgreSQL via DATABASE_URL env var (provided by Render)
 _DB_USER = "root"
 _DB_PASS = quote_plus("Yateesh@12")   # encodes @ → %40
 _DB_HOST = "localhost"
 _DB_PORT = "3306"
 _DB_NAME = "ai_pdf_assistant"
-if os.getenv("RENDER") and not os.getenv("DATABASE_URL"):
-    # On Render, fallback to SQLite if no external DB is configured
-    DATABASE_URL = "sqlite:///./render_fallback.db"
+
+_raw_db_url = os.getenv("DATABASE_URL", "")
+
+if _raw_db_url:
+    # Render gives postgres:// but SQLAlchemy 2.x needs postgresql://
+    if _raw_db_url.startswith("postgres://"):
+        _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = _raw_db_url
 else:
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        f"mysql+pymysql://{_DB_USER}:{_DB_PASS}@{_DB_HOST}:{_DB_PORT}/{_DB_NAME}"
-    )
+    DATABASE_URL = f"mysql+pymysql://{_DB_USER}:{_DB_PASS}@{_DB_HOST}:{_DB_PORT}/{_DB_NAME}"
 
 # ── JWT Auth ───────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-change-in-production")

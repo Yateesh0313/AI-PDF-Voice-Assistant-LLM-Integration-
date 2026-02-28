@@ -7,7 +7,14 @@ __pycache__/
 venv/
 env/
 *.gguf
+*.bin
+*.safetensors
 *.pdf
 uploads/
 *.log
 .DS_Store
+Thumbs.db
+git_out.txt
+*.db
+static/response_*.mp3
+input_*.webm
