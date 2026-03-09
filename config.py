@@ -37,10 +37,10 @@ SECRET_KEY = os.getenv("SECRET_KEY", "super-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("TOKEN_EXPIRY", "1440"))  # 24 h
 
-# ── LM Studio / OpenAI-compatible LLM ─────────────────
-LLM_BASE_URL = os.getenv("OPENAI_API_BASE", "http://localhost:1234/v1")
-LLM_API_KEY = os.getenv("OPENAI_API_KEY", "lm-studio")
-LLM_MODEL = os.getenv("LLM_MODEL", "tinyllama-1.1b-chat-v1.0")
+# ── LLM (Groq / OpenAI-compatible) ────────────────────
+LLM_BASE_URL = os.getenv("OPENAI_API_BASE", "https://api.groq.com/openai/v1")
+LLM_API_KEY = os.getenv("OPENAI_API_KEY", "lm-studio")  # set real key via env var
+LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 
 # ── Embeddings ─────────────────────────────────────────

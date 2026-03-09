@@ -18,3 +18,6 @@ git_out.txt
 *.db
 static/response_*.mp3
 input_*.webm
+.agents/
+.agent/
+.gemini/

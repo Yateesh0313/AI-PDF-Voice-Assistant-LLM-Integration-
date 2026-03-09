@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 # Install ffmpeg (needed for Whisper STT)
 RUN apt-get update && \

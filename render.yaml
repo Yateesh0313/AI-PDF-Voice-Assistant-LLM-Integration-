@@ -17,11 +17,11 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: OPENAI_API_BASE
-        sync: false            # set manually in Render dashboard
+        value: "https://api.groq.com/openai/v1"
       - key: OPENAI_API_KEY
         sync: false            # set manually in Render dashboard
       - key: LLM_MODEL
-        value: "gpt-3.5-turbo" # or your preferred model
+        value: "llama-3.1-8b-instant"
       - key: WHISPER_MODEL
         value: "tiny"          # use tiny on Render (less RAM)
       - key: RENDER
