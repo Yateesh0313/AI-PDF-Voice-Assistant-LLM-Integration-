@@ -48,5 +48,5 @@ EMBEDDING_MODEL = os.getenv(
     "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
 )
 
-# ── Whisper STT ────────────────────────────────────────
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
+# ── Whisper STT (via Groq API — no local model needed) ──
+# Model is specified in stt.py, runs on Groq's servers

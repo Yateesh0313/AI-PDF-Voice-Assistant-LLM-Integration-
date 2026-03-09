@@ -10,7 +10,7 @@ pdfplumber
 faiss-cpu
 sentence-transformers
 pydub
-openai-whisper
+httpx
 gTTS
 sqlalchemy
 bcrypt
