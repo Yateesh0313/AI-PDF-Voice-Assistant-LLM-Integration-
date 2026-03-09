@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_community.document_loaders import PDFPlumberLoader
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
@@ -36,7 +36,8 @@ def _get_llm():
 def _get_embeddings():
     global _embeddings
     if _embeddings is None:
-        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+        # FastEmbed uses ONNX — no PyTorch needed, ~100 MB RAM
+        _embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
     return _embeddings
 
 # ── Per-user retriever cache ──────────────────────────

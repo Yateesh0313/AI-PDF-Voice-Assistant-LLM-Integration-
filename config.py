@@ -43,9 +43,9 @@ LLM_API_KEY = os.getenv("OPENAI_API_KEY", "lm-studio")  # set real key via env v
 LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 
-# ── Embeddings ─────────────────────────────────────────
+# ── Embeddings (FastEmbed / ONNX — no PyTorch needed) ──
 EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+    "EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"
 )
 
 # ── Whisper STT (via Groq API — no local model needed) ──
