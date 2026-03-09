@@ -1,6 +1,7 @@
 databases:
   - name: ai-pdf-assistant-db
     plan: free
+    region: oregon
     databaseName: ai_pdf_assistant
     user: ai_pdf_user
 
@@ -9,6 +10,7 @@ services:
     name: ai-pdf-assistant
     runtime: docker
     plan: free
+    region: oregon
     envVars:
       - key: DATABASE_URL
         fromDatabase:
