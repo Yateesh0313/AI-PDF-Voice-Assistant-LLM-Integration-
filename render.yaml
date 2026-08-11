@@ -1,10 +1,3 @@
-databases:
-  - name: ai-pdf-assistant-db
-    plan: free
-    region: oregon
-    databaseName: ai_pdf_assistant
-    user: ai_pdf_user
-
 services:
   - type: web
     name: ai-pdf-assistant
@@ -12,10 +5,6 @@ services:
     plan: free
     region: oregon
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ai-pdf-assistant-db
-          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: OPENAI_API_BASE
@@ -24,7 +13,5 @@ services:
         sync: false            # set manually in Render dashboard
       - key: LLM_MODEL
         value: "llama-3.1-8b-instant"
-      - key: WHISPER_MODEL
-        value: "tiny"          # use tiny on Render (less RAM)
       - key: RENDER
         value: "true"

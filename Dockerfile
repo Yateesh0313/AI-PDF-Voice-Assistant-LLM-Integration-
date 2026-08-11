@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Create needed directories
-RUN mkdir -p uploads static
+RUN mkdir -p uploads static data
 
 # Expose port (Render sets $PORT)
 EXPOSE 10000

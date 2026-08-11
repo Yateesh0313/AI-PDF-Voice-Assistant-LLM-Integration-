@@ -16,4 +16,3 @@ bcrypt
 python-jose[cryptography]
 python-multipart
 pymysql
-psycopg2-binary
