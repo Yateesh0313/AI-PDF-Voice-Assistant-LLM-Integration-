@@ -3,16 +3,17 @@ AI PDF Voice Assistant — FastAPI entry point.
 Wires up all routers, middleware, and serves the SPA frontend.
 """
 from contextlib import asynccontextmanager
-import glob, os
+import glob, os, logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import STATIC_DIR, UPLOAD_DIR
-from database import engine, Base
-from routers import auth_router, chat_router, pdf_router
+from config import STATIC_DIR, UPLOAD_DIR, DATABASE_URL
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # ── Startup / shutdown ────────────────────────────────
@@ -27,9 +28,20 @@ def _cleanup_temp_files():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create DB tables
-    Base.metadata.create_all(bind=engine)
+    logger.info("Starting AI PDF Voice Assistant...")
+    logger.info("Database URL type: %s", DATABASE_URL.split(":")[0])
+
+    # Import here to catch errors gracefully
+    from database import engine, Base
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully.")
+    except Exception as e:
+        logger.error("Database setup failed: %s", e)
+        raise
+
     _cleanup_temp_files()
+    logger.info("Application started successfully!")
     yield
 
 
@@ -44,12 +56,20 @@ app.add_middleware(
 )
 
 # ── Routers ───────────────────────────────────────────
+from routers import auth_router, chat_router, pdf_router
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(pdf_router.router)
 
 # ── Static files ──────────────────────────────────────
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+# ── Health check ──────────────────────────────────────
+@app.get("/health")
+async def health():
+    return JSONResponse({"status": "ok", "db": DATABASE_URL.split(":")[0]})
+
 
 # ── Frontend SPA ──────────────────────────────────────
 @app.get("/")
