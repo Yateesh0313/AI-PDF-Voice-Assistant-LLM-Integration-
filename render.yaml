@@ -15,3 +15,5 @@ services:
         value: "llama-3.1-8b-instant"
       - key: RENDER
         value: "true"
+      - key: RENDER_EXTERNAL_URL
+        value: "https://ai-pdf-assistant-njai.onrender.com"

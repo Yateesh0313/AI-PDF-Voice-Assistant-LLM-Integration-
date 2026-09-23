@@ -3,12 +3,14 @@ AI PDF Voice Assistant — FastAPI entry point.
 Wires up all routers, middleware, and serves the SPA frontend.
 """
 from contextlib import asynccontextmanager
+import asyncio
 import glob, os, logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+import httpx
 
 from config import STATIC_DIR, UPLOAD_DIR, DATABASE_URL
 
@@ -24,6 +26,25 @@ def _cleanup_temp_files():
     for f in glob.glob("input_*.webm"):
         try: os.remove(f)
         except OSError: pass
+
+
+# ── Keep-alive: prevent Render free-tier 15-min sleep ──
+async def _keep_alive():
+    """Ping our own /health endpoint every 10 minutes to stay awake."""
+    url = os.getenv("RENDER_EXTERNAL_URL", "")
+    if not url:
+        logger.info("RENDER_EXTERNAL_URL not set — keep-alive disabled (local dev).")
+        return
+    logger.info("Keep-alive enabled: pinging %s/health every 10 min.", url)
+    await asyncio.sleep(60)  # let startup finish
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                resp = await client.get(f"{url}/health", timeout=10)
+                logger.debug("Keep-alive ping: %s", resp.status_code)
+            except Exception as exc:
+                logger.warning("Keep-alive ping failed: %s", exc)
+            await asyncio.sleep(600)  # 10 minutes
 
 
 @asynccontextmanager
@@ -42,7 +63,11 @@ async def lifespan(app: FastAPI):
 
     _cleanup_temp_files()
     logger.info("Application started successfully!")
+
+    # Start keep-alive background task
+    keep_alive_task = asyncio.create_task(_keep_alive())
     yield
+    keep_alive_task.cancel()
 
 
 # ── App ───────────────────────────────────────────────

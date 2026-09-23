@@ -131,23 +131,32 @@ function loginSuccess(data) {
   showApp();
 }
 
-function logout() {
+function logout(message) {
   // Tell server to clear the auth cookie
   fetch('/api/auth/logout', { method: 'POST' }).catch(() => { });
   currentUser = null;
   currentSessionId = null;
   $('mainApp').classList.remove('show');
-  document.querySelector('.landing').style.display = '';
-  $('authOverlay').classList.remove('show');
+  document.querySelector('.landing').style.display = 'none';
+  $('authOverlay').classList.add('show');
+  if (message) {
+    $('authError').textContent = message;
+    showToast(message, 'error');
+  }
 }
 
-// API helper — cookies are sent automatically, handles 401
+// API helper — cookies are sent automatically, handles 401 & 409
 function api(url, opts = {}) {
   return fetch(url, opts).then(r => {
     if (r.status === 401) {
-      logout();
-      showToast('Session expired — please log in again', 'error');
+      logout('Session expired — please log in again.');
       throw new Error('Session expired');
+    }
+    if (r.status === 409) {
+      // Server restarted, user data was wiped — need to re-register
+      logout('Server was restarted and accounts were reset. Please register again.');
+      switchAuthTab('register');
+      throw new Error('Account reset — please register again');
     }
     return r;
   });
@@ -155,11 +164,40 @@ function api(url, opts = {}) {
 
 async function checkAuth() {
   try {
-    const r = await fetch('/api/auth/me');
+    const r = await fetch('/api/auth/check');
     if (!r.ok) return;
-    currentUser = await r.json();
-    showApp();
+    const data = await r.json();
+    if (data.valid) {
+      currentUser = data.user;
+      showApp();
+    } else if (data.reason === 'user_gone') {
+      // Server restarted, DB was wiped — show register form with helpful message
+      document.querySelector('.landing').style.display = 'none';
+      $('authOverlay').classList.add('show');
+      switchAuthTab('register');
+      $('authError').textContent = 'Server was restarted. Please create a new account.';
+    }
+    // For 'no_token' or 'token_expired', just show landing page (default)
   } catch { }
+}
+
+// Periodic heartbeat — check session every 5 min to catch DB wipes early
+let _heartbeatInterval = null;
+function startHeartbeat() {
+  if (_heartbeatInterval) return;
+  _heartbeatInterval = setInterval(async () => {
+    if (!currentUser) return;
+    try {
+      const r = await fetch('/api/auth/check');
+      const data = await r.json();
+      if (!data.valid && data.reason === 'user_gone') {
+        logout('Server was restarted and accounts were reset. Please register again.');
+        switchAuthTab('register');
+      } else if (!data.valid && data.reason === 'token_expired') {
+        logout('Session expired — please log in again.');
+      }
+    } catch { }
+  }, 300000); // 5 minutes
 }
 
 function showApp() {
@@ -171,6 +209,7 @@ function showApp() {
   $('sbEmail').textContent = currentUser.email;
   loadSessions();
   loadPDFs();
+  startHeartbeat();
 }
 
 /* ==========================================================

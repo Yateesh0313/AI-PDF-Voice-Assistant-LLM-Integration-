@@ -49,5 +49,11 @@ def get_current_user(
 
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        # JWT is valid but user was wiped (Render restart / DB reset).
+        # Return 409 so the frontend can distinguish this from a true auth failure
+        # and prompt re-registration instead of a confusing "session expired" message.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Account no longer exists. Please register again.",
+        )
     return user

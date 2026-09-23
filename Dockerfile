@@ -21,5 +21,7 @@ RUN mkdir -p uploads static data
 # Expose port (Render sets $PORT)
 EXPOSE 10000
 
-# Start with gunicorn + uvicorn workers
-CMD gunicorn app:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-10000} --timeout 120
+# Start with gunicorn + uvicorn worker
+# - 1 worker: Render free tier has only 512 MB RAM
+# - 300s timeout: embedding model download can be slow on first cold-start
+CMD gunicorn app:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-10000} --timeout 300
