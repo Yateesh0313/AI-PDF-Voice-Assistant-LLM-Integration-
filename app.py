@@ -146,6 +146,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 async def health():
     """Health check endpoint — verifies database connectivity and keeps app alive."""
     from database import engine, SessionLocal
+    from config import LLM_BASE_URL, LLM_MODEL, LLM_API_KEY
     db_type = engine.url.drivername if hasattr(engine, "url") else "unknown"
     db_ok = False
     try:
@@ -156,10 +157,15 @@ async def health():
     except Exception as e:
         logger.warning("Health check DB probe failed: %s", e)
 
+    has_real_key = bool(LLM_API_KEY and LLM_API_KEY != "lm-studio" and len(LLM_API_KEY) > 8)
+
     return JSONResponse({
         "status": "ok" if db_ok else "degraded",
         "db": db_type,
         "db_connected": db_ok,
+        "llm_base_url": LLM_BASE_URL,
+        "llm_model": LLM_MODEL,
+        "llm_key_configured": has_real_key,
     })
 
 
