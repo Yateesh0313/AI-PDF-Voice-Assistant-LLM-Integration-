@@ -130,7 +130,7 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
         if LLM_API_KEY == "lm-studio" or "api key" in error_msg or "authentication" in error_msg or "401" in error_msg:
             return "⚠️ AI API key not configured or invalid. Please add your Groq API key as OPENAI_API_KEY or GROQ_API_KEY in the Render dashboard environment variables.", "general"
         elif "not found" in error_msg or "notfound" in error_msg or "404" in error_msg or "unknown request url" in error_msg:
-            return "⚠️ AI model or endpoint not found. Please verify OPENAI_API_BASE is set to https://api.groq.com/openai/v1 and LLM_MODEL is set to llama-3.1-8b-instant.", "general"
+            return f"⚠️ AI model or endpoint not found ({str(e)}). Please verify OPENAI_API_BASE is set to https://api.groq.com/openai/v1 and LLM_MODEL is set to llama-3.1-8b-instant.", "general"
         elif "rate limit" in error_msg or "429" in error_msg:
             return "⚠️ The AI service is rate-limited. Please wait a moment and try again.", "general"
         elif "timeout" in error_msg or "timed out" in error_msg:
