@@ -80,7 +80,7 @@ else:
     LLM_BASE_URL = _raw_llm_base
 
 LLM_API_KEY = (os.getenv("OPENAI_API_KEY") or os.getenv("GROQ_API_KEY") or "lm-studio").strip()
-LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant").strip()
+LLM_MODEL = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile").strip()
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 LLM_REQUEST_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "60"))  # seconds
 
