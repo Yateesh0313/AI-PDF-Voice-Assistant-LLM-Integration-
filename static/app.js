@@ -55,6 +55,20 @@ function showToast(message, type = 'success') {
 // ── Escape HTML ──
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+// ── Safe JSON parser (prevents "Unexpected token" errors on 500/502/HTML) ──
+async function safeJson(response) {
+  try {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { detail: text || `Server error (${response.status})` };
+    }
+  } catch (err) {
+    return { detail: err.message || `Network error (${response.status})` };
+  }
+}
+
 /* ==========================================================
    LANDING PAGE
    ========================================================== */
@@ -98,9 +112,9 @@ async function handleLogin(e) {
     const r = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: $('lUser').value, password: $('lPass').value })
+      body: JSON.stringify({ username: $('lUser').value.trim(), password: $('lPass').value })
     });
-    const d = await r.json();
+    const d = await safeJson(r);
     if (!r.ok) throw new Error(d.detail || 'Login failed');
     loginSuccess(d);
   } catch (e) { $('authError').textContent = e.message; }
@@ -114,9 +128,9 @@ async function handleRegister(e) {
     const r = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: $('rUser').value, email: $('rEmail').value, password: $('rPass').value })
+      body: JSON.stringify({ username: $('rUser').value.trim(), email: $('rEmail').value.trim(), password: $('rPass').value })
     });
-    const d = await r.json();
+    const d = await safeJson(r);
     if (!r.ok) throw new Error(d.detail || 'Registration failed');
     loginSuccess(d);
     showToast('Account created successfully!');
@@ -166,7 +180,7 @@ async function checkAuth() {
   try {
     const r = await fetch('/api/auth/check');
     if (!r.ok) return;
-    const data = await r.json();
+    const data = await safeJson(r);
     if (data.valid) {
       currentUser = data.user;
       showApp();
@@ -189,7 +203,7 @@ function startHeartbeat() {
     if (!currentUser) return;
     try {
       const r = await fetch('/api/auth/check');
-      const data = await r.json();
+      const data = await safeJson(r);
       if (!data.valid && data.reason === 'user_gone') {
         logout('Server was restarted and accounts were reset. Please register again.');
         switchAuthTab('register');
@@ -218,7 +232,8 @@ function showApp() {
 async function loadSessions() {
   try {
     const r = await api('/api/chat/sessions');
-    const list = await r.json();
+    const list = await safeJson(r);
+    if (!r.ok || !Array.isArray(list)) return;
     const ul = $('sessionList');
     ul.innerHTML = '';
     list.forEach(s => {
@@ -234,11 +249,12 @@ async function loadSessions() {
 async function loadSession(id) {
   try {
     const r = await api('/api/chat/sessions/' + id);
-    const data = await r.json();
+    const data = await safeJson(r);
+    if (!r.ok) return;
     currentSessionId = id;
     $('cpTitle').textContent = data.title;
     $('chatArea').innerHTML = '';
-    if (data.messages.length === 0) {
+    if (!data.messages || data.messages.length === 0) {
       $('chatArea').innerHTML = '<div class="empty" id="emptyState"><div class="ei">💬</div><p>Start a conversation — type a message or tap the mic.</p></div>';
     } else {
       data.messages.forEach(m => addMsg(m.role, m.content, m.audio_url ? '/' + m.audio_url : null, m.source, false));
@@ -269,7 +285,8 @@ async function delSession(id) {
 async function loadPDFs() {
   try {
     const r = await api('/api/pdf/list');
-    const list = await r.json();
+    const list = await safeJson(r);
+    if (!r.ok || !Array.isArray(list)) return;
     const ul = $('pdfList');
     ul.innerHTML = '';
     if (!list.length) { ul.innerHTML = '<li style="font-size:0.68rem;color:var(--dim);padding:0.3rem 0.6rem">No PDFs uploaded</li>'; return; }
@@ -290,9 +307,9 @@ async function uploadPDF(file) {
   s.className = 'upload-status'; s.innerHTML = '<span class="spinner"></span> Indexing ' + esc(file.name) + '…';
   try {
     const r = await api('/api/pdf/upload', { method: 'POST', body: fd });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.detail);
-    s.className = 'upload-status ok'; s.textContent = '✓ ' + d.message;
+    const d = await safeJson(r);
+    if (!r.ok) throw new Error(d.detail || 'Upload failed');
+    s.className = 'upload-status ok'; s.textContent = '✓ ' + (d.message || 'Indexed');
     showToast('PDF uploaded successfully!');
     loadPDFs();
   } catch (e) {
@@ -372,19 +389,24 @@ async function sendText() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: q, session_id: currentSessionId })
     });
-    const d = await r.json();
+    const d = await safeJson(r);
     rmThinking();
-    addMsg('ai', d.answer, null, d.source);
-    if (d.session_id && !currentSessionId) {
-      currentSessionId = d.session_id;
-      $('cpTitle').textContent = q.slice(0, 60);
-      loadSessions();
+    if (!r.ok) {
+      addMsg('ai', `Error: ${d.detail || 'Could not get answer.'}`, null, 'general');
+    } else {
+      addMsg('ai', d.answer, null, d.source);
+      if (d.session_id && !currentSessionId) {
+        currentSessionId = d.session_id;
+        $('cpTitle').textContent = q.slice(0, 60);
+        loadSessions();
+      }
+      if (ttsOn && 'speechSynthesis' in window) {
+        const u = new SpeechSynthesisUtterance(d.answer); u.rate = 1; speechSynthesis.speak(u);
+      }
     }
-    if (ttsOn && 'speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(d.answer); u.rate = 1; speechSynthesis.speak(u);
-    }
-  } catch {
-    rmThinking(); addMsg('ai', 'Error: could not reach the server.', null, 'general');
+  } catch (e) {
+    rmThinking();
+    addMsg('ai', 'Error: ' + (e.message || 'could not reach the server.'), null, 'general');
   }
   setBusy(false);
 }
@@ -454,7 +476,7 @@ async function sendVoice() {
   if (currentSessionId) fd.append('session_id', currentSessionId);
   try {
     const r = await api('/api/chat/voice', { method: 'POST', body: fd });
-    const d = await r.json();
+    const d = await safeJson(r);
     if (!r.ok) throw new Error(d.detail || 'Voice processing failed');
     rmThinking();
     const ubs = $('chatArea').querySelectorAll('.msg.user .bubble');

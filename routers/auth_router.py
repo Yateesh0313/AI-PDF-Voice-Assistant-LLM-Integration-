@@ -2,14 +2,18 @@
 Authentication router — register, login, logout, and user info.
 Uses HTTP-only cookies for JWT token storage (no localStorage).
 """
+import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import get_db, init_db
 from models import User
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from config import ACCESS_TOKEN_EXPIRE_MINUTES
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -33,7 +37,6 @@ class UserResponse(BaseModel):
 # ── Helper: set auth cookie ───────────────────────────
 def _set_auth_cookie(response: Response, token: str):
     """Set JWT as an HTTP-only cookie (not accessible via JavaScript)."""
-    import os
     is_production = bool(os.getenv("RENDER"))
     response.set_cookie(
         key="access_token",
@@ -49,46 +52,67 @@ def _set_auth_cookie(response: Response, token: str):
 # ── Endpoints ──────────────────────────────────────────
 @router.post("/register")
 def register(req: RegisterRequest, response: Response, db: Session = Depends(get_db)):
-    # Check duplicates
-    if db.query(User).filter(User.username == req.username).first():
-        raise HTTPException(status_code=400, detail="Username already taken")
-    if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
+    try:
+        # Check duplicates
+        if db.query(User).filter(User.username == req.username).first():
+            raise HTTPException(status_code=400, detail="Username already taken")
+        if db.query(User).filter(User.email == req.email).first():
+            raise HTTPException(status_code=400, detail="Email already registered")
 
-    user = User(
-        username=req.username,
-        email=req.email,
-        hashed_password=hash_password(req.password),
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+        user = User(
+            username=req.username,
+            email=req.email,
+            hashed_password=hash_password(req.password),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
-    token = create_access_token({"sub": str(user.id)})
-    _set_auth_cookie(response, token)
+        token = create_access_token({"sub": str(user.id)})
+        _set_auth_cookie(response, token)
 
-    return {
-        "user": {"id": user.id, "username": user.username, "email": user.email},
-    }
+        return {
+            "user": {"id": user.id, "username": user.username, "email": user.email},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error("Registration failed: %s", e, exc_info=True)
+        # Attempt to auto-repair tables if missing
+        try:
+            init_db()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
 
 
 @router.post("/login")
 def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == req.username).first()
-    if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+    try:
+        user = db.query(User).filter(User.username == req.username).first()
+        if not user or not verify_password(req.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token = create_access_token({"sub": str(user.id)})
-    _set_auth_cookie(response, token)
+        token = create_access_token({"sub": str(user.id)})
+        _set_auth_cookie(response, token)
 
-    return {
-        "user": {"id": user.id, "username": user.username, "email": user.email},
-    }
+        return {
+            "user": {"id": user.id, "username": user.username, "email": user.email},
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Login failed: %s", e, exc_info=True)
+        try:
+            init_db()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Login error: {str(e)}")
 
 
 @router.post("/logout")
 def logout_user(response: Response):
-    import os
     is_production = bool(os.getenv("RENDER"))
     response.delete_cookie(
         key="access_token",
@@ -122,8 +146,11 @@ def check_session(request: Request, db: Session = Depends(get_db)):
     except (JWTError, ValueError):
         return {"valid": False, "reason": "token_expired"}
 
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return {"valid": False, "reason": "user_gone"}
-
-    return {"valid": True, "user": {"id": user.id, "username": user.username, "email": user.email}}
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return {"valid": False, "reason": "user_gone"}
+        return {"valid": True, "user": {"id": user.id, "username": user.username, "email": user.email}}
+    except Exception as e:
+        logger.warning("Session check query failed: %s", e)
+        return {"valid": False, "reason": "db_error"}

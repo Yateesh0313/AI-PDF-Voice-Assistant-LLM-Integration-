@@ -6,10 +6,12 @@ from contextlib import asynccontextmanager
 import asyncio
 import glob, os, logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import httpx
 
 from config import STATIC_DIR, UPLOAD_DIR, DATABASE_URL, KEEP_ALIVE_INTERVAL
@@ -65,18 +67,14 @@ async def _keep_alive():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting AI PDF Voice Assistant...")
-    db_type = DATABASE_URL.split(":")[0] if ":" in DATABASE_URL else "unknown"
-    logger.info("Database URL type: %s", db_type)
-
-    # Import here to catch errors gracefully
-    from database import engine, Base
+    
+    # Initialize database tables (imports models so tables are registered)
+    from database import init_db
     try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully.")
+        init_db()
+        logger.info("Database initialized successfully.")
     except Exception as e:
         logger.error("Database setup failed: %s", e)
-        # Don't crash the entire app — the DB might recover
-        logger.error("App will start but database features may be unavailable.")
 
     _cleanup_temp_files()
 
@@ -113,6 +111,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Global Exception Handler (Always JSON, never raw text) ──
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, StarletteHTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=getattr(exc, "headers", None),
+        )
+    if isinstance(exc, RequestValidationError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": str(exc)},
+        )
+    logger.error("Unhandled exception on %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": f"Internal server error: {str(exc) or 'An unexpected error occurred.'}"},
+    )
+
 # ── Routers ───────────────────────────────────────────
 from routers import auth_router, chat_router, pdf_router
 app.include_router(auth_router.router)
@@ -126,9 +144,23 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # ── Health check ──────────────────────────────────────
 @app.get("/health")
 async def health():
-    """Health check endpoint — used by Render and keep-alive."""
-    db_type = DATABASE_URL.split(":")[0] if ":" in DATABASE_URL else "unknown"
-    return JSONResponse({"status": "ok", "db": db_type})
+    """Health check endpoint — verifies database connectivity and keeps app alive."""
+    from database import engine, SessionLocal
+    db_type = engine.url.drivername if hasattr(engine, "url") else "unknown"
+    db_ok = False
+    try:
+        with SessionLocal() as db:
+            from sqlalchemy import text
+            db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception as e:
+        logger.warning("Health check DB probe failed: %s", e)
+
+    return JSONResponse({
+        "status": "ok" if db_ok else "degraded",
+        "db": db_type,
+        "db_connected": db_ok,
+    })
 
 
 # ── Frontend SPA ──────────────────────────────────────
