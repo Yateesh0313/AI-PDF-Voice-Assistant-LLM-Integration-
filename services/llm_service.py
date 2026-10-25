@@ -126,6 +126,7 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
 
     except Exception as e:
         logger.error("LLM/RAG error for user %d: %s", user_id, e)
+        error_msg = str(e).lower()
         if LLM_API_KEY == "lm-studio" or "api key" in error_msg or "authentication" in error_msg or "401" in error_msg:
             return "⚠️ AI API key not configured or invalid. Please add your Groq API key as OPENAI_API_KEY or GROQ_API_KEY in the Render dashboard environment variables.", "general"
         elif "not found" in error_msg or "notfound" in error_msg or "404" in error_msg or "unknown request url" in error_msg:

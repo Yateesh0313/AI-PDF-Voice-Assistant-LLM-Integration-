@@ -121,8 +121,8 @@ def ask(req: AskRequest, user: User = Depends(get_current_user), db: Session = D
     try:
         answer, source = get_answer(req.question, user.id)
     except Exception as e:
-        logger.error("get_answer failed for user %d: %s", user.id, e)
-        answer = "⚠️ Sorry, something went wrong. Please try again."
+        logger.error("get_answer failed for user %d: %s", user.id, e, exc_info=True)
+        answer = f"⚠️ Could not generate an answer: {str(e)}"
         source = "general"
 
     # Save AI message
@@ -162,8 +162,8 @@ def voice_chat(
         try:
             answer, source = get_answer(question, user.id)
         except Exception as e:
-            logger.error("get_answer failed in voice chat: %s", e)
-            answer = "⚠️ Sorry, something went wrong generating a response. Please try again."
+            logger.error("get_answer failed in voice chat: %s", e, exc_info=True)
+            answer = f"⚠️ Could not generate an answer: {str(e)}"
             source = "general"
 
         try:
