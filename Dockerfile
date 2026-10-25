@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 # Install ffmpeg (needed for Whisper STT)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,5 +23,14 @@ EXPOSE 10000
 
 # Start with gunicorn + uvicorn worker
 # - 1 worker: Render free tier has only 512 MB RAM
-# - 300s timeout: embedding model download can be slow on first cold-start
-CMD gunicorn app:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${PORT:-10000} --timeout 300
+# - 600s timeout: embedding model download can be slow on first cold-start
+# - graceful-timeout: allow in-flight requests to finish
+CMD gunicorn app:app \
+    -w 1 \
+    -k uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:${PORT:-10000} \
+    --timeout 600 \
+    --graceful-timeout 30 \
+    --keep-alive 5 \
+    --access-logfile - \
+    --error-logfile -

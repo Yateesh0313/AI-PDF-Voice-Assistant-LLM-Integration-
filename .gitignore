@@ -21,3 +21,5 @@ input_*.webm
 .agents/
 .agent/
 .gemini/
+.vscode/
+data/

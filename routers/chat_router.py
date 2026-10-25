@@ -4,7 +4,7 @@ Chat router — text chat, voice chat, session management, and chat history.
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import shutil, uuid, os
+import shutil, uuid, os, logging
 from typing import Optional
 
 from database import get_db
@@ -13,6 +13,8 @@ from auth import get_current_user
 from services.llm_service import get_answer
 from stt import speech_to_text
 from tts import text_to_speech
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -107,13 +109,21 @@ def _ensure_session(session_id: int | None, user: User, db: Session, title: str 
 # ── Text chat ──────────────────────────────────────────
 @router.post("/ask")
 def ask(req: AskRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
     session = _ensure_session(req.session_id, user, db, title=req.question[:60])
 
     # Save user message
     user_msg = Message(session_id=session.id, role="user", content=req.question)
     db.add(user_msg)
 
-    answer, source = get_answer(req.question, user.id)
+    try:
+        answer, source = get_answer(req.question, user.id)
+    except Exception as e:
+        logger.error("get_answer failed for user %d: %s", user.id, e)
+        answer = "⚠️ Sorry, something went wrong. Please try again."
+        source = "general"
 
     # Save AI message
     ai_msg = Message(session_id=session.id, role="ai", content=answer, source=source)
@@ -148,11 +158,24 @@ def voice_chat(
         question = speech_to_text(audio_path)
         if not question:
             raise HTTPException(status_code=400, detail="Could not understand audio. Please speak clearly and try again.")
-        answer, source = get_answer(question, user.id)
-        audio_file = text_to_speech(answer)
+
+        try:
+            answer, source = get_answer(question, user.id)
+        except Exception as e:
+            logger.error("get_answer failed in voice chat: %s", e)
+            answer = "⚠️ Sorry, something went wrong generating a response. Please try again."
+            source = "general"
+
+        try:
+            audio_file = text_to_speech(answer)
+        except Exception as e:
+            logger.error("TTS failed: %s", e)
+            audio_file = None
+
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Voice processing error: %s", e)
         raise HTTPException(status_code=500, detail=f"Voice processing error: {str(e)}")
     finally:
         if os.path.exists(audio_path):

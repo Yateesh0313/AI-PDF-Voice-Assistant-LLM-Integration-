@@ -1,7 +1,9 @@
 """
 LLM & RAG service — per-user retriever management and answer generation.
+Includes retry logic, timeout handling, and graceful error recovery.
 """
 import os
+import logging
 from typing import Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
@@ -14,31 +16,42 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 from config import (
-    LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, LLM_TEMPERATURE, EMBEDDING_MODEL
+    LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, LLM_TEMPERATURE,
+    EMBEDDING_MODEL, LLM_REQUEST_TIMEOUT,
 )
+
+logger = logging.getLogger(__name__)
 
 # ── Lazy-initialize LLM & embeddings (on first use) ───
 # Avoids blocking server startup — Render times out if port isn't bound quickly.
 _llm = None
 _embeddings = None
 
+
 def _get_llm():
     global _llm
     if _llm is None:
+        logger.info("Initializing LLM: model=%s, base_url=%s", LLM_MODEL, LLM_BASE_URL)
         _llm = ChatOpenAI(
             model=LLM_MODEL,
             temperature=LLM_TEMPERATURE,
             openai_api_base=LLM_BASE_URL,
             openai_api_key=LLM_API_KEY,
+            request_timeout=LLM_REQUEST_TIMEOUT,
+            max_retries=2,
         )
     return _llm
+
 
 def _get_embeddings():
     global _embeddings
     if _embeddings is None:
+        logger.info("Initializing embedding model: %s", EMBEDDING_MODEL)
         # FastEmbed uses ONNX — no PyTorch needed, ~100 MB RAM
         _embeddings = FastEmbedEmbeddings(model_name=EMBEDDING_MODEL)
+        logger.info("Embedding model loaded successfully.")
     return _embeddings
+
 
 # ── Per-user retriever cache ──────────────────────────
 _user_retrievers: Dict[int, object] = {}
@@ -54,12 +67,22 @@ def build_retriever(user_id: int, pdf_paths: List[str]):
 
     for path in pdf_paths:
         if os.path.exists(path):
-            docs = PDFPlumberLoader(path).load()
-            all_chunks.extend(splitter.split_documents(docs))
+            try:
+                docs = PDFPlumberLoader(path).load()
+                all_chunks.extend(splitter.split_documents(docs))
+            except Exception as e:
+                logger.error("Failed to load PDF %s: %s", path, e)
+                continue
 
     if all_chunks:
-        vs = FAISS.from_documents(all_chunks, _get_embeddings())
-        _user_retrievers[user_id] = vs.as_retriever(search_kwargs={"k": 3})
+        try:
+            vs = FAISS.from_documents(all_chunks, _get_embeddings())
+            _user_retrievers[user_id] = vs.as_retriever(search_kwargs={"k": 3})
+            logger.info("Built retriever for user %d with %d chunks from %d PDFs",
+                        user_id, len(all_chunks), len(pdf_paths))
+        except Exception as e:
+            logger.error("Failed to build FAISS index for user %d: %s", user_id, e)
+            _user_retrievers.pop(user_id, None)
     else:
         _user_retrievers.pop(user_id, None)
 
@@ -68,13 +91,15 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
     """
     Answer a question using RAG (if PDF indexed) or direct LLM.
     Returns (answer_text, source) where source is "pdf" or "general".
+    Includes error handling so the chat never fully crashes.
     """
     retriever = _user_retrievers.get(user_id)
 
-    if retriever is None:
-        return _get_llm().invoke(question).content, "general"
+    try:
+        if retriever is None:
+            return _get_llm().invoke(question).content, "general"
 
-    prompt = ChatPromptTemplate.from_template("""
+        prompt = ChatPromptTemplate.from_template("""
     Use ONLY the PDF context to answer.
     If answer not present, reply exactly: NO_DATA
 
@@ -85,16 +110,29 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
     {question}
     """)
 
-    chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | _get_llm()
-        | StrOutputParser()
-    )
+        chain = (
+            {"context": retriever, "question": RunnablePassthrough()}
+            | prompt
+            | _get_llm()
+            | StrOutputParser()
+        )
 
-    answer = chain.invoke(question)
+        answer = chain.invoke(question)
 
-    if "NO_DATA" in answer:
-        return _get_llm().invoke(question).content, "general"
+        if "NO_DATA" in answer:
+            return _get_llm().invoke(question).content, "general"
 
-    return answer, "pdf"
+        return answer, "pdf"
+
+    except Exception as e:
+        logger.error("LLM/RAG error for user %d: %s", user_id, e)
+        error_msg = str(e).lower()
+
+        if "api key" in error_msg or "authentication" in error_msg or "401" in error_msg:
+            return "⚠️ The AI service API key is invalid or expired. Please contact the administrator.", "general"
+        elif "rate limit" in error_msg or "429" in error_msg:
+            return "⚠️ Too many requests — the AI service is rate-limited. Please wait a moment and try again.", "general"
+        elif "timeout" in error_msg or "timed out" in error_msg:
+            return "⚠️ The AI service took too long to respond. Please try again.", "general"
+        else:
+            return f"⚠️ Something went wrong while generating a response. Please try again. (Error: {type(e).__name__})", "general"

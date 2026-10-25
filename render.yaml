@@ -4,6 +4,7 @@ services:
     runtime: docker
     plan: free
     region: oregon
+    healthCheckPath: /health
     envVars:
       - key: SECRET_KEY
         generateValue: true
@@ -17,3 +18,5 @@ services:
         value: "true"
       - key: RENDER_EXTERNAL_URL
         value: "https://ai-pdf-assistant-njai.onrender.com"
+      - key: KEEP_ALIVE_INTERVAL
+        value: "300"
