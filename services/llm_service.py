@@ -189,11 +189,21 @@ def get_answer(question: str, user_id: int) -> tuple[str, str]:
 
     try:
         if retriever is None:
-            resp = _invoke_with_fallback(lambda llm: llm.invoke(question))
-            return resp.content, "general"
+            # Always respond in English for general questions
+            general_prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are a helpful AI assistant. You MUST ALWAYS respond in English only, regardless of the language of the user's question. If the question is in another language, understand it but reply in English."),
+                ("human", "{question}"),
+            ])
 
-        prompt = ChatPromptTemplate.from_template("""
-Use ONLY the PDF context to answer.
+            def _run_general(llm):
+                chain = general_prompt | llm | StrOutputParser()
+                return chain.invoke({"question": question})
+
+            answer = _invoke_with_fallback(_run_general)
+            return answer, "general"
+
+        prompt = ChatPromptTemplate.from_template("""You are a helpful AI assistant. You MUST ALWAYS respond in English only, regardless of the language of the PDF content or the question.
+Use ONLY the PDF context to answer. If the PDF content is in another language, translate the relevant information into English in your answer.
 If answer not present, reply exactly: NO_DATA
 
 Context:
@@ -215,8 +225,18 @@ Question:
         answer = _invoke_with_fallback(_run_rag)
 
         if "NO_DATA" in answer:
-            resp = _invoke_with_fallback(lambda llm: llm.invoke(question))
-            return resp.content, "general"
+            # Fallback to general LLM with English-only system prompt
+            general_prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are a helpful AI assistant. You MUST ALWAYS respond in English only, regardless of the language of the user's question. If the question is in another language, understand it but reply in English."),
+                ("human", "{question}"),
+            ])
+
+            def _run_fallback(llm):
+                chain = general_prompt | llm | StrOutputParser()
+                return chain.invoke({"question": question})
+
+            fallback_answer = _invoke_with_fallback(_run_fallback)
+            return fallback_answer, "general"
 
         return answer, "pdf"
 
