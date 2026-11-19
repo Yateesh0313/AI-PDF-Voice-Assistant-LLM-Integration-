@@ -73,10 +73,15 @@ def _discover_models() -> List[str]:
             remote_models = [m["id"] for m in data.get("data", [])]
             logger.info("Found %d models on %s", len(remote_models), LLM_BASE_URL)
 
-            # Filter for text chat models (exclude whisper, embedding, guardrails)
+            # Filter for text chat models (exclude whisper, embedding, guardrails, TTS, vision-only, etc.)
+            _EXCLUDE_KEYWORDS = [
+                "whisper", "embed", "guard", "moderation", "audio",
+                "orpheus", "tts", "speech", "vision", "image",
+                "canopy", "distil", "playai",
+            ]
             chat_models = [
                 m for m in remote_models
-                if not any(x in m.lower() for x in ["whisper", "embed", "guard", "moderation", "audio"])
+                if not any(x in m.lower() for x in _EXCLUDE_KEYWORDS)
             ]
             if chat_models:
                 order = []
@@ -135,8 +140,13 @@ def _invoke_with_fallback(invoke_fn):
         except Exception as e:
             last_error = e
             err_lower = str(e).lower()
-            # If the error is model_not_found / does not exist / 404, try next model
-            if any(k in err_lower for k in ["model_not_found", "does not exist", "not found", "404", "unknown_url", "not supported", "decommissioned"]):
+            # If the error is model_not_found / does not exist / 404 / terms required, try next model
+            if any(k in err_lower for k in [
+                "model_not_found", "does not exist", "not found", "404",
+                "unknown_url", "not supported", "decommissioned",
+                "model_terms_required", "terms acceptance", "terms_required",
+                "invalid_request_error",
+            ]):
                 logger.warning("Model '%s' failed (%s). Trying next candidate...", model_name, e)
                 continue
             # For auth errors, rate limits, timeouts, re-raise immediately
